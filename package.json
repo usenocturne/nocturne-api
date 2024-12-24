@@ -1,0 +1,18 @@
+{
+  "name": "nocturne-api",
+  "version": "0.1.0",
+  "homepage": "https://github.com/usenocturne/nocturne-api#readme",
+  "bugs": {
+    "url": "https://github.com/usenocturne/nocturne-api/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/usenocturne/nocturne-api.git"
+  },
+  "type": "module",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
