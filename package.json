@@ -10,9 +10,16 @@
     "url": "git+https://github.com/usenocturne/nocturne-api.git"
   },
   "type": "module",
-  "main": "index.js",
-  "scripts": {},
+  "main": "src/app.js",
+  "scripts": {
+    "start": "bun run ./src/app.js",
+    "dev": "nodemon ./src/app.js"
+  },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
   }
 }
