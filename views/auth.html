@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login to Nocturne</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/feather-icons"></script>
+</head>
+
+<body class="bg-black">
+  <div class="h-screen bg-black p-6 flex flex-col sm:items-center pt-24">
+    <div class="w-full max-w-md">
+      <svg class="h-14 mb-8 w-auto sm:mx-auto" viewBox="0 0 457 452">
+        <path opacity="0.8"
+          d="M337.506 24.9087C368.254 85.1957 385.594 153.463 385.594 225.78C385.594 298.098 368.254 366.366 337.506 426.654C408.686 387.945 457 312.505 457 225.781C457 139.057 408.686 63.6173 337.506 24.9087Z"
+          fill="#CBCBCB" />
+        <path
+          d="M234.757 20.1171C224.421 5.47596 206.815 -2.40914 189.157 0.65516C81.708 19.3019 0 112.999 0 225.781C0 338.562 81.7075 432.259 189.156 450.906C206.814 453.97 224.42 446.085 234.756 431.444C275.797 373.304 299.906 302.358 299.906 225.78C299.906 149.203 275.797 78.2567 234.757 20.1171Z"
+          fill="white" />
+      </svg>
+
+      <h1 class="text-4xl font-bold text-white mb-8 mt-4 sm:text-center">
+        Enter Spotify Credentials
+      </h1>
+
+      <form id="credentialsForm" class="space-y-6">
+        <input type="text" id="clientId" placeholder="Client ID"
+          class="w-full px-4 py-3 bg-black/10 ring-1 ring-inset focus:ring-2 focus:ring-white/20 ring-white/10 rounded-lg text-white placeholder-white/40"
+          required />
+
+        <div class="relative">
+          <input type="password" id="clientSecret" placeholder="Client Secret"
+            class="w-full pr-12 px-4 py-3 bg-black/10 ring-1 ring-inset focus:ring-2 focus:ring-white/20 ring-white/10 rounded-lg text-white placeholder-white/40"
+            required />
+          <button type="button" id="togglePassword"
+            class="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white transition-colors"
+            tabindex="-1">
+            <i data-feather="eye" id="eyeIcon"></i>
+          </button>
+        </div>
+
+        <div id="errorMessage" class="text-red-400 text-sm text-center bg-red-400/10 p-3 rounded-lg hidden"></div>
+
+        <button type="submit" id="submitButton"
+          class="w-full rounded-full bg-white/10 px-6 py-4 text-lg font-semibold text-white shadow-sm disabled:opacity-50">
+          Continue
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    feather.replace();
+
+    const deviceId = '<%= deviceId %>';
+    const salt = '<%= salt %>';
+    const baseUrl = '<%= baseUrl %>';
+
+    const form = document.getElementById('credentialsForm');
+    const clientSecret = document.getElementById('clientSecret');
+    const togglePassword = document.getElementById('togglePassword');
+    const eyeIcon = document.getElementById('eyeIcon');
+    const submitButton = document.getElementById('submitButton');
+    const errorMessage = document.getElementById('errorMessage');
+
+    togglePassword.addEventListener('click', () => {
+      const type = clientSecret.getAttribute('type') === 'password' ? 'text' : 'password';
+      clientSecret.setAttribute('type', type);
+
+      eyeIcon.setAttribute('data-feather', type === 'password' ? 'eye' : 'eye-off');
+      feather.replace();
+    });
+
+    async function encryptData(text, deviceId) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(text);
+
+      const keyMaterial = await window.crypto.subtle.importKey(
+        "raw",
+        encoder.encode(deviceId),
+        { name: "PBKDF2" },
+        false,
+        ["deriveBits", "deriveKey"]
+      );
+
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+      const key = await window.crypto.subtle.deriveKey(
+        {
+          name: "PBKDF2",
+          salt: encoder.encode(salt),
+          iterations: 100000,
+          hash: "SHA-256"
+        },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt"]
+      );
+
+      const encrypted = await window.crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        data
+      );
+
+      const encryptedArray = new Uint8Array(iv.length + encrypted.byteLength);
+      encryptedArray.set(iv);
+      encryptedArray.set(new Uint8Array(encrypted), iv.length);
+
+      return btoa(String.fromCharCode(...encryptedArray));
+    }
+
+    if (window.history.replaceState) {
+      window.history.replaceState(null, null, window.location.href);
+    }
+
+    const clientIdInput = document.getElementById('clientId');
+    // TODO: Verify these credentials
+    // https://github.com/usenocturne/nocturne-ui/blob/main/src/components/auth/phone/PhoneAuthPage.jsx#L30
+    // https://github.com/usenocturne/nocturne-ui/blob/main/src/pages/api/v1/auth/validate-credentials.js
+
+    let isSubmitting = false;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
+
+      isSubmitting = true;
+      submitButton.disabled = true;
+      submitButton.textContent = 'Submitting...';
+      errorMessage.classList.add('hidden');
+
+      try {
+        const clientId = document.getElementById('clientId').value.trim();
+        const clientSecret = document.getElementById('clientSecret').value.trim();
+
+        if (!clientId || !clientSecret) {
+          throw new Error('Please fill in all fields');
+        }
+
+        const credentials = JSON.stringify({ clientId, clientSecret });
+        const encryptedData = await encryptData(credentials, deviceId);
+
+        await fetch(`${baseUrl}/v1/auth/store-secret/${deviceId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ encryptedData })
+        });
+
+        const redirectUri = encodeURIComponent(`${baseUrl}/v1/auth/callback`);
+        const scopes = "user-read-recently-played user-read-private user-top-read user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read user-library-modify playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private";
+
+        window.location.href = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&state=${deviceId}`;
+      } catch (error) {
+        errorMessage.textContent = error.message || 'An unexpected error occurred';
+        errorMessage.classList.remove('hidden');
+      } finally {
+        isSubmitting = false;
+        submitButton.disabled = false;
+        submitButton.textContent = 'Continue';
+      }
+    });
+  </script>
+</body>
+
+</html>
